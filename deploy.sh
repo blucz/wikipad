@@ -14,9 +14,9 @@ tmplink="${INSTALL_PATH}_tmp"
 # deploy to a dated directory
 echo "Deploying files"
 mkdir $datedir || exit 1
-cp spawnhelper_autorestart $datedir || exit 2
-cp bin/release/*           $datedir || exit 2
-cp -a static               $datedir || exit 6
+cp spawnhelper_autorestart    $datedir || exit 2
+cp Server/bin/release/*       $datedir || exit 2
+cp -a Server/static           $datedir || exit 6
 
 # down service
 echo "Stopping Wikipad"
