@@ -135,7 +135,7 @@ let ev_confirm_del (tx:HttpTransaction) (pagekey:string) =
     let page = match load_page pagekey with
                   | Some page -> page
                   | None      -> (dummy_page pagekey)
-    let editor = sprintf @"<div class='confirm'>
+    let confirmer = sprintf @"<div class='confirm'>
                                Are you sure you want to delete %s?
                                <div class='confirmbuttons' align='right'>
                                    <form action='%s' method='post' style='display:inline'>
@@ -148,7 +148,7 @@ let ev_confirm_del (tx:HttpTransaction) (pagekey:string) =
                                    </form>
                                <div>
                            </div>" page.title (del_url pagekey) (del_url pagekey) 
-    let page = render_page page.title (page_url page.key) editor
+    let page = render_page page.title (page_url page.key) confirmer
     tx.Response.Respond (HttpStatusCode.OK, page)
 
 let ev_del (tx:HttpTransaction) (pagekey:string) =
@@ -192,6 +192,7 @@ let ev_edit (tx:HttpTransaction) (pagekey:string) =
                                <div>
                                    <div class='editorheading'>Title</div>
                                    <input type='text' name='title' value='%s' class='editortitle' />
+
                                    <div class='editorheading'>Content</div>
                                    <textarea name='content' class='editortext'>%s</textarea>
                                    <div class='submitcontainer'>
