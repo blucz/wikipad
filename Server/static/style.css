@@ -14,8 +14,9 @@ h3 { color: #333; }
 h4 { color: #333; }
 
 li { 
+    padding: 0;
+    margin: 0;
     margin-left: -12px;
-    list-style: circle;
 }
 
 div.leftsep {
@@ -71,7 +72,8 @@ a:hover {
 }
 .leftheading {
     color :#333;
-    padding: 6px;
+    padding-right: 6px;
+    padding-bottom: 6px;
     padding-left: 1px;
     font-weight:bold
 }
