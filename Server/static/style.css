@@ -7,8 +7,7 @@ div.hr {
     width: 100%;
 }
 
-b { color: #333; }
-
+b  { color: #333; }
 h1 { color: #333; }
 h2 { color: #333; }
 h3 { color: #333; }
@@ -19,23 +18,25 @@ li {
     list-style: circle;
 }
 
-div.leftsep
-{
+div.leftsep {
     border-bottom = 1px solid #333; 
     width: 40px;
 }
 #left {
-    float: left;
+    position: absolute;
+    left: 0px;
     width: 80px;
     /*background-color: #eee;*/
     padding-left: 12px;
     padding-right:12px;
     padding-top: 12px;
     font-size: 10pt;
+    clear: both;
 }
 #content {
+    position:absolute;
     width: 700px;
-    padding-left: 80px; 
+    left: 100px; 
 }
 #main {
     font-size: 10pt;
@@ -44,11 +45,15 @@ span.title {
 }
 
 #top {
-    padding: 8px;
+    padding: 12px;
     vertical-align: middle;
     border-bottom: 1px solid #aaa;
-    font-size: 26pt;
+    font-size: 22pt;
     color: #333;
+}
+#top a {
+    color: #333;
+    text-decoration: none;
 }
 a {
     color: #777;
@@ -87,6 +92,7 @@ code {
     height: 400px;
 }
 .submitcontainer {
+    margin-top: 8px;
     width: 640px;
     text-align: right;
 }
@@ -149,3 +155,6 @@ code {
 .editor {
     padding-top: 12px;
 }
+.editorheading {
+    margin-top: 4px;
+    margin-bottom: 4px;

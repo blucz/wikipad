@@ -198,6 +198,7 @@ let ev_edit (tx:HttpTransaction) (pagekey:string) =
 
                                    <div class='editorheading'>Content</div>
                                    <textarea name='content' class='editortext'>%s</textarea>
+
                                    <div class='submitcontainer'>
                                        <input type='hidden' name='pagekey' value='%s'></input>
                                        <input type='submit' value='Save'></input>
