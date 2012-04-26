@@ -11,22 +11,25 @@ open HttpServer
 open Wiki.Utils
 open Wiki.Parser
 
-// configuration
-let dbpath     = "db"           // path to databases
-let staticpath = "static"       // path to static resources
-let port       = 8000           // port for http server
-let root       = "/wiki"        // path of wiki relative to the domain
+// argument processing
+let mutable dbpath     = "db"           // path to databases
+let mutable staticpath = "static"       // path to static resources
+let mutable port       = 8000           // port for http server
+let mutable root       = "/wiki"        // path of wiki relative to the domain
+
+for arg in Environment.GetCommandLineArgs () do
+    match arg with 
+        | StartsWith "-static=" rest      -> staticpath <- rest
+        | StartsWith "-db="     rest      -> dbpath     <- rest
+        | StartsWith "-port="   (Int num) -> port       <- num
+        | StartsWith "-root="   rest      -> root       <- rest
+        | _                               -> eprintfn "Unrecognized argument: %s" arg
 
 // environment
 ignore (Directory.CreateDirectory dbpath)
 let server      = new HttpServer   (port = port)
 let meta_db     = new LevelDb.Database (mkpath dbpath "meta.db")
 let content_db  = new LevelDb.Database (mkpath dbpath "content.db")
-
-// 
-// page       = key, title, modtime, [versionkey]
-// versionkey = blob
-//
 
 type Version = {
     mutable modtime : DateTime
@@ -189,7 +192,7 @@ let ev_edit (tx:HttpTransaction) (pagekey:string) =
                            | Some page -> page,(load_content page.content_id)
                            | None      -> (dummy_page pagekey),""
     let editor = sprintf @"<form action='%s' method='post'>
-                               <div>
+                               <div class='editor'>
                                    <div class='editorheading'>Title</div>
                                    <input type='text' name='title' value='%s' class='editortitle' />
 
@@ -219,10 +222,14 @@ let render_content (pagekey:string) (content:string) =
 let render_dummy_content (pagekey:string) =
     sprintf @"<div class='content'>
                   <div class='contentwrapper'>
+                    <p>
                       This page doesn't exist yet
+                      </p>
                   </div>
                   <div class='editlinks' align='right'>
-                      <a href='%s'>Create</a> 
+                      <div class='leftlink'>
+                          <a href='%s'>Create</a> 
+                      </div>
                   </div> 
               </div>" (edit_url pagekey)
 
@@ -249,18 +256,17 @@ let ev_request (tx:HttpTransaction) =
                                  else cb tx (urldecode page)
         match path with
             | ""                                   -> page_url "home" |> redirect tx 
-            | "/favicon.ico"                       -> ev_404 tx
+            | "/favicon.ico"                       -> mkpath staticpath "favicon.ico" |> sendfile tx
             | p when p.StartsWith "/static/"       -> mkpath staticpath (p.Substring "/static/".Length) |> sendfile tx
             | p when p.EndsWith "/save"            -> handle_page_action (strip_suffix p "/save") ev_save
             | p when p.EndsWith "/edit"            -> handle_page_action (strip_suffix p "/edit") ev_edit
             | p when p.EndsWith "/del"             -> handle_page_action (strip_suffix p "/del")  ev_del 
             | p                                    -> handle_page_action p ev_page
     with e ->
-        eprintfn "Error processing request: %s" (e.ToString ())
+        printfn "Error processing request: %s" (e.ToString ())
         tx.Response.Respond HttpStatusCode.InternalServerError
  
 server.add_HandleRequest (HttpHandlerDelegate ev_request)
 server.Start ()
 printfn "Listening on port %d" server.BoundPort
-
 Thread.Sleep Timeout.Infinite

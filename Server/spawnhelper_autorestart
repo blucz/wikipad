@@ -1,0 +1,27 @@
+#!/bin/bash
+
+APPNAME=$1
+LIBPATHS=$2
+APPRUN=$3
+CRONOLOG=$4
+CONTACT_EMAIL=$5
+
+PID=
+trap 'kill $PID ; exit' INT TERM
+
+while true
+do
+    LD_LIBRARY_PATH=$LIBPATHS $APPRUN > >(exec $CRONOLOG > /dev/null) 2>&1 &
+    PID=$!
+    wait $PID
+    RC=$?
+    if [ $RC -ne 0 ]
+    then
+        MSG="$APPNAME exited with code $RC. see server logs for details."
+        echo $MSG >&2
+        echo $MSG | mail -s "Crash Report: $APPNAME" $CONTACT_EMAIL 
+        sleep 1
+    else
+        exit 0
+    fi
+done

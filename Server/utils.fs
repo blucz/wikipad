@@ -25,9 +25,8 @@ let sendfile (tx:HttpTransaction) (path:string) =
             if cachehit then
                 tx.Response.Respond HttpStatusCode.NotModified 
             else
-                let stream = File.Open (path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite ||| FileShare.Delete)
                 tx.Response.Headers.SetHeader           ("Last-Modified", fi.LastWriteTimeUtc.ToString ())
-                tx.Response.Respond stream
+                tx.Response.Respond (HttpStatusCode.OK, File.ReadAllBytes path)
         with    
             | :? FileNotFoundException -> tx.Response.Respond(HttpStatusCode.NotFound);
             | e                        ->
@@ -158,3 +157,8 @@ let xml_decode (s:string) =
     loop 0
     sb.ToString ()
     
+let (|StartsWith|_|) (prefix:string) (str:string) =
+    if startswith prefix str then
+        Some (skipchars prefix.Length str)
+    else
+        None
