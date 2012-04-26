@@ -13,9 +13,11 @@ GROUP=www-data
 PIDFILE=/var/run/$NAME.pid
 LOGDIR=/var/log/wikipad
 CONTACT_EMAIL=brian@blucz.com
+DISQUS=blucz
+DOMAIN=http://blucz.com
    
 MONO=/opt/mono-2.10.9
-APPRUN="$MONO/bin/mono-sgen --llvm $APPDIR/Server.exe -logtoconsole -port=$PORT -static=$STATICDIR -db=$DBDIR -root=$ROOT"
+APPRUN="$MONO/bin/mono-sgen --llvm $APPDIR/Server.exe -logtoconsole -port=$PORT -static=$STATICDIR -db=$DBDIR -root=$ROOT -disqus=$DISQUS -domain=$DOMAIN"
 LIBPATHS="$APPDIR:$MONO/lib:$LD_LIBRARY_PATH"
 
 SPAWNHELPER=$APPDIR/spawnhelper_autorestart

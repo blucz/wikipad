@@ -16,14 +16,18 @@ let mutable dbpath     = "db"           // path to databases
 let mutable staticpath = "static"       // path to static resources
 let mutable port       = 8000           // port for http server
 let mutable root       = "/wiki"        // path of wiki relative to the domain
+let mutable domain     = "http://blucz.com"
+let mutable disqus     = None
 
 for arg in Environment.GetCommandLineArgs () do
     match arg with 
-        | StartsWith "-static=" rest      -> staticpath <- rest
-        | StartsWith "-db="     rest      -> dbpath     <- rest
-        | StartsWith "-port="   (Int num) -> port       <- num
-        | StartsWith "-root="   rest      -> root       <- rest
-        | _                               -> eprintfn "Unrecognized argument: %s" arg
+        | StartsWith "-static="   rest      -> staticpath <- rest
+        | StartsWith "-db="       rest      -> dbpath     <- rest
+        | StartsWith "-port="     (Int num) -> port       <- num
+        | StartsWith "-root="     rest      -> root       <- rest
+        | StartsWith "-disqus="   ""        -> ()               // support empty arg 
+        | StartsWith "-disqus="   rest      -> disqus     <- Some rest
+        | _                                 -> eprintfn "Unrecognized argument: %s" arg
 
 // environment
 ignore (Directory.CreateDirectory dbpath)
@@ -209,7 +213,22 @@ let ev_edit (tx:HttpTransaction) (pagekey:string) =
     tx.Response.Respond (HttpStatusCode.OK, page)
 
 let render_content (pagekey:string) (content:string) =
-    let content = wiki_creole content page_url id
+    let content  = wiki_creole content page_url id
+    let comments = match disqus with 
+                       | None        -> ""
+                       | Some disqus -> sprintf @"<div id='comments'>
+                                                  <div id='disqus_thread'></div>
+                                                  <script type='text/javascript'>
+                                                      var disqus_shortname  = '%s'; // required: replace example with your forum shortname
+                                                      (function() {
+                                                          var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+                                                          dsq.src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
+                                                          (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+                                                      })();
+                                                  </script>
+                                                  <noscript>Please enable JavaScript to view the <a href='http://disqus.com/?ref_noscript'>comments powered by Disqus.</a></noscript>
+                                                  <a href='http://disqus.com' class='dsq-brlink'>Comments powered by <span class='logo-disqus'>Disqus</span></a>
+                                                  </div>" disqus
     sprintf @"<div class='content'>
                   <div class='contentwrapper'>
                       %s
@@ -218,7 +237,8 @@ let render_content (pagekey:string) (content:string) =
                       <a href='%s'>Edit</a> | 
                       <a href='%s'>Delete</a>
                   </div> 
-              </div>" content (edit_url pagekey) (del_url pagekey)
+                  %s
+              </div>" content (edit_url pagekey) (del_url pagekey) comments
 
 let render_dummy_content (pagekey:string) =
     sprintf @"<div class='content'>
@@ -258,7 +278,10 @@ let ev_request (tx:HttpTransaction) =
         match path with
             | ""                                   -> page_url "home" |> redirect tx 
             | "/favicon.ico"                       -> mkpath staticpath "favicon.ico" |> sendfile tx
-            | p when p.StartsWith "/static/"       -> mkpath staticpath (p.Substring "/static/".Length) |> sendfile tx
+            | p when p.StartsWith "/static/"       -> 
+                let filename = p.Substring "/static/".Length
+                if filename.Contains ".." then ev_404 tx
+                else mkpath staticpath filename |> sendfile tx
             | p when p.EndsWith "/save"            -> handle_page_action (strip_suffix p "/save") ev_save
             | p when p.EndsWith "/edit"            -> handle_page_action (strip_suffix p "/edit") ev_edit
             | p when p.EndsWith "/del"             -> handle_page_action (strip_suffix p "/del")  ev_del 

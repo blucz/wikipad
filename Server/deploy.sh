@@ -18,10 +18,6 @@ cp spawnhelper_autorestart $datedir || exit 2
 cp bin/release/*           $datedir || exit 2
 cp -a static               $datedir || exit 6
 
-# copy init.d script
-echo "Copying new /etc/init.d/wikipad"
-cp wikipad /etc/init.d
-
 # down service
 echo "Stopping Wikipad"
 /etc/init.d/wikipad stop
