@@ -26,7 +26,7 @@ let sendfile (tx:HttpTransaction) (path:string) =
                 tx.Response.Respond HttpStatusCode.NotModified 
             else
                 tx.Response.Headers.SetHeader           ("Last-Modified", fi.LastWriteTimeUtc.ToString ())
-                tx.Response.Respond (HttpStatusCode.InternalServerError, File.ReadAllBytes path)
+                tx.Response.Respond (HttpStatusCode.OK, File.ReadAllBytes path)
         with    
             | :? FileNotFoundException -> tx.Response.Respond(HttpStatusCode.NotFound);
             | e                        ->

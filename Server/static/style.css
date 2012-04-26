@@ -26,11 +26,11 @@ div.leftsep
 }
 #left {
     float: left;
-    width: 5em;
-    /*background-color: #eee;*/
+    width: 80px;
     padding-left: 1.0em;
     padding-right: 1.0em;
     font-size: 1.0em;
+    padding-top: 12px;
 }
 #content {
     width: 50em;
@@ -50,7 +50,7 @@ span.title {
     color: #333;
 }
 a {
-    color: #333;
+    color: #777;
     text-decoration: none;
 }
 a:visited {
@@ -60,13 +60,13 @@ a:hover {
     text-decoration: underline;
 }
 .leftlink {
-    padding: 0.2em;
+    padding-bottom: 0.2em;
     padding-left: 0.3em;
 }
 .leftheading {
     color :#333;
-    padding: 0.4em;
-    padding-left: 0.05em;
+    padding-bottom: 0.4em;
+    padding-left:   0.05em;
     font-weight:bold
 }
 code {
@@ -102,10 +102,12 @@ code {
     margin-top: 8px;
 }
 .confirm {
+    margin-top: 8px;
     width:240px;
     text-align:right;
 }
 .content {
+    margin-top: 12px;
     width: 640px;
 }
 .contentwrapper {
@@ -118,6 +120,10 @@ code {
     margin-top: 8px;
     width: 640px;
 }
+.contentwrapper h1 { margin: 0; padding: 0; }
+.contentwrapper h2 { margin: 0; padding: 0; }
+.contentwrapper h3 { margin: 0; padding: 0; }
+.contentwrapper h4 { margin: 0; padding: 0; }
 
 .contentwrapper table * tr th { 
     padding: 6px 12px 6px 12px;
@@ -138,4 +144,7 @@ code {
     border-spacing: 0;
     margin: 0em 0em 0em 0em; 
     border-collapse:collapse;
+}
+.editor {
+    padding-top: 12px;
 }

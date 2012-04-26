@@ -31,11 +31,6 @@ let server      = new HttpServer   (port = port)
 let meta_db     = new LevelDb.Database (mkpath dbpath "meta.db")
 let content_db  = new LevelDb.Database (mkpath dbpath "content.db")
 
-// 
-// page       = key, title, modtime, [versionkey]
-// versionkey = blob
-//
-
 type Version = {
     mutable modtime : DateTime
     mutable id      : Guid
@@ -197,7 +192,7 @@ let ev_edit (tx:HttpTransaction) (pagekey:string) =
                            | Some page -> page,(load_content page.content_id)
                            | None      -> (dummy_page pagekey),""
     let editor = sprintf @"<form action='%s' method='post'>
-                               <div>
+                               <div class='editor'>
                                    <div class='editorheading'>Title</div>
                                    <input type='text' name='title' value='%s' class='editortitle' />
                                    <div class='editorheading'>Content</div>
@@ -226,10 +221,14 @@ let render_content (pagekey:string) (content:string) =
 let render_dummy_content (pagekey:string) =
     sprintf @"<div class='content'>
                   <div class='contentwrapper'>
+                    <p>
                       This page doesn't exist yet
+                      </p>
                   </div>
                   <div class='editlinks' align='right'>
-                      <a href='%s'>Create</a> 
+                      <div class='leftlink'>
+                          <a href='%s'>Create</a> 
+                      </div>
                   </div> 
               </div>" (edit_url pagekey)
 
@@ -263,7 +262,7 @@ let ev_request (tx:HttpTransaction) =
             | p when p.EndsWith "/del"             -> handle_page_action (strip_suffix p "/del")  ev_del 
             | p                                    -> handle_page_action p ev_page
     with e ->
-        eprintfn "Error processing request: %s" (e.ToString ())
+        printfn "Error processing request: %s" (e.ToString ())
         tx.Response.Respond HttpStatusCode.InternalServerError
  
 server.add_HandleRequest (HttpHandlerDelegate ev_request)
