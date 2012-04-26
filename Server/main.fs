@@ -11,11 +11,19 @@ open HttpServer
 open Wiki.Utils
 open Wiki.Parser
 
-// configuration
-let dbpath     = "db"           // path to databases
-let staticpath = "static"       // path to static resources
-let port       = 8000           // port for http server
-let root       = "/wiki"        // path of wiki relative to the domain
+// argument processing
+let mutable dbpath     = "db"           // path to databases
+let mutable staticpath = "static"       // path to static resources
+let mutable port       = 8000           // port for http server
+let mutable root       = "/wiki"        // path of wiki relative to the domain
+
+for arg in Environment.GetCommandLineArgs () do
+    match arg with 
+        | StartsWith "-static=" rest      -> staticpath <- rest
+        | StartsWith "-db="     rest      -> dbpath     <- rest
+        | StartsWith "-port="   (Int num) -> port       <- num
+        | StartsWith "-root="   rest      -> root       <- rest
+        | _                               -> eprintfn "Unrecognized argument: %s" arg
 
 // environment
 ignore (Directory.CreateDirectory dbpath)
@@ -248,7 +256,7 @@ let ev_request (tx:HttpTransaction) =
                                  else cb tx (urldecode page)
         match path with
             | ""                                   -> page_url "home" |> redirect tx 
-            | "/favicon.ico"                       -> ev_404 tx
+            | "/favicon.ico"                       -> mkpath staticpath "favicon.ico" |> sendfile tx
             | p when p.StartsWith "/static/"       -> mkpath staticpath (p.Substring "/static/".Length) |> sendfile tx
             | p when p.EndsWith "/save"            -> handle_page_action (strip_suffix p "/save") ev_save
             | p when p.EndsWith "/edit"            -> handle_page_action (strip_suffix p "/edit") ev_edit
@@ -261,5 +269,4 @@ let ev_request (tx:HttpTransaction) =
 server.add_HandleRequest (HttpHandlerDelegate ev_request)
 server.Start ()
 printfn "Listening on port %d" server.BoundPort
-
 Thread.Sleep Timeout.Infinite

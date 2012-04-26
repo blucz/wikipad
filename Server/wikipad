@@ -1,0 +1,66 @@
+#!/bin/bash
+
+PORT=8000
+NAME=wikipad
+APPDIR=/opt/wikipad
+STATICDIR=$APPDIR/static
+DBDIR=var/wikipad/db
+ROOT=/wiki
+
+DESC=$NAME
+USER=www-data
+GROUP=www-data
+PIDFILE=/var/run/$NAME.pid
+LOGDIR=/var/log/wikipad
+CONTACT_EMAIL=brian@blucz.com
+   
+MONO=/opt/mono-2.10.9
+APPRUN="$MONO/bin/mono-sgen --llvm $APPDIR/Server.exe -logtoconsole -port=$PORT -static=$STATICDIR -db=$DBDIR -root=$ROOT"
+LIBPATHS="$APPDIR:$MONO/lib:$LD_LIBRARY_PATH"
+
+SPAWNHELPER=$APPDIR/spawnhelper_autorestart
+CRONOLOG="/usr/bin/cronolog -l $LOGDIR/$NAME.log -a $LOGDIR/%Y/%Y-%m-$NAME.log"
+
+ulimit -n 65536
+
+case "$1" in 
+    start)
+        echo -n "Starting $DESC... "
+        # check for pid file
+        if [ -f $PIDFILE ]; then
+            echo "failed: already running."
+            exit 1
+        fi
+	if ! start-stop-daemon -q --start --verbose --oknodo --chuid $USER:$GROUP --pidfile $PIDFILE --make-pidfile --background \
+		 --exec $SPAWNHELPER -- "$NAME" "$LIBPATHS" "$APPRUN" "$CRONOLOG" "$CONTACT_EMAIL"
+        then
+            echo "failed."
+            exit 1
+        else
+            exit 0
+        fi
+        ;;
+    stop)
+        echo -n "Stopping $DESC... "
+        # check for pid file
+        if [ ! -f $PIDFILE ]; then
+            echo "failed: not running."
+            exit 1
+        fi
+        # attempt to terminate process
+        if ! kill `cat $PIDFILE` ; then
+            echo "failed."
+            exit 1
+        fi
+        # kill pid file
+        rm -f $PIDFILE
+        echo "success."
+        exit 0
+        ;;
+    *)  
+        echo "Usage: /etc/init.d/$NAME {start|stop}" >&2
+        exit 1
+        ;;
+esac        
+
+exit 0 
