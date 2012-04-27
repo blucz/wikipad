@@ -26,7 +26,7 @@ div.leftsep {
 #left {
     position: absolute;
     left: 0px;
-    width: 80px;
+    width: 120px;
     /*background-color: #eee;*/
     padding-left: 12px;
     padding-right:12px;
@@ -37,7 +37,7 @@ div.leftsep {
 #content {
     position:absolute;
     width: 800px;
-    left: 100px; 
+    left: 140px; 
 }
 #main {
     font-size: 10pt;
@@ -89,7 +89,9 @@ code {
     padding-left: 4px;   
 }
 .editortext {
+    position: relative;
     font-family: monospace;
+    height: 80%;
     width: 800px;
     height: 400px;
 }
@@ -130,10 +132,10 @@ code {
     width: 800px;
 }
 
-.contentwrapper h1 { margin: 0; padding: 0; font-size: 16pt; font-weight: bold; margin-bottom:4px; color: #000; }
-.contentwrapper h2 { margin: 0; padding: 0; font-size: 14pt; font-weight: bold; margin-bottom:4px; color: #000; }
-.contentwrapper h3 { margin: 0; padding: 0; font-size: 12pt; font-weight: bold; margin-bottom:4px; color: #000; }
-.contentwrapper h4 { margin: 0; padding: 0; font-size: 10pt; font-weight: bold; margin-bottom:4px; color: #000; }
+.contentwrapper h1 { margin: 0; padding: 0; font-size: 18pt; font-weight: bold; margin-bottom:16px; color: #000; }
+.contentwrapper h2 { margin: 0; padding: 0; font-size: 14pt; font-weight: bold; margin-bottom:12px; color: #000; }
+.contentwrapper h3 { margin: 0; padding: 0; font-size: 12pt; font-weight: bold; margin-bottom:8px; color: #000; }
+.contentwrapper h4 { margin: 0; padding: 0; font-size: 10pt; font-weight: bold; margin-bottom:6px; color: #000; }
 
 .contentwrapper table * tr th { 
     padding: 6px 12px 6px 12px;
@@ -154,6 +156,7 @@ code {
     border-spacing: 0;
     margin: 0 0 0 0;
     border-collapse:collapse;
+    margin: 20px;
 }
 .editor {
     padding-top: 12px;
@@ -216,3 +219,29 @@ code {
     float: left;
 }
 
+.contentwrapper li { 
+    margin-bottom: 2px;
+    margin-left: -12px;
+}
+
+.contentwrapper pre {
+    padding: 8px;
+    background-color: #f8f8f8;
+    border: 1px solid #ddd;
+    font-size: 10pt;
+}
+.contentwrapper code {
+    font-size: 10pt;
+}
+.contentwrapper hr {
+    margin:0px;
+    padding:0px;
+    border-bottom:1px solid #ccc;
+    border-top:0px;
+    border-left:0px;
+    border-right:0px;
+    line-height:0px;
+    height:1px;
+    display:block;
+    width: 80%;
+}
