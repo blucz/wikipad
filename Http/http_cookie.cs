@@ -151,6 +151,8 @@ namespace HttpServer {
             int eq_idx = -1;
             int key_idx = 0;
             HttpDataDictionary dict = new HttpDataDictionary ();
+            if (header == null)
+                return dict;
 
             for (int i = 0; i < header.Length; i++) {
                 if (header [i] == ';') {

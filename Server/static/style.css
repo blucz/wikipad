@@ -161,7 +161,44 @@ code {
     margin-top: 4px;
     margin-bottom: 4px;
 }
+
 #comments {
     margin-top: 20px;
     margin: 12px;
 }
+
+.cookieme {
+    position: absolute;
+    right: 12px;
+    top: 12px;
+    font-size: 12pt;
+    display: block;
+    background-color: #fff;
+    color: #fff;
+    width: 40px;
+    height: 40px;
+}
+
+.uncookieme {
+    position: absolute;
+    right: 12px;
+    top: 12px;
+    font-size: 12pt;
+    display: block;
+    background-color: #fff;
+    color: #fff;
+    width: 40px;
+    height: 40px;
+    background-color: #fff;
+}
+
+.cookieme:hover {
+    background-color: #fd0;
+    color: #fd0;
+}
+
+.uncookieme:hover {
+    background-color: #f00;
+    color: #f00;
+}
+

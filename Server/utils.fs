@@ -5,6 +5,7 @@ open System.IO
 open System.Text
 open HttpServer
 open System.Collections.Generic
+open System.Security.Cryptography
 
 // utils to make functional style easier
 let mkpath (a:string) (b:string) : string = Path.Combine(a,b)
@@ -99,6 +100,7 @@ let trimstart (c:char) (s:string) = s.TrimStart [| c |]
 let trimend (c:char) (s:string) = s.TrimEnd   [| c |]
 let startswith (needle:string) (haystack:string) = haystack.StartsWith needle
 let split (splitstr:string) (str:string) : string list = str.Split ([| splitstr |], StringSplitOptions.None) |> Array.toList
+let wssplit (str:string) : string list = str.Split ([| ' ';'\t';'\n';'\r' |], StringSplitOptions.RemoveEmptyEntries) |> Array.toList
 let skipchars (n:int) (s:string) = s.Substring n
 let read_to_ws (str:string) (i:int) =
     match str |> Seq.skip i |> Seq.tryFindIndex Char.IsWhiteSpace with
@@ -162,3 +164,23 @@ let (|StartsWith|_|) (prefix:string) (str:string) =
         Some (skipchars prefix.Length str)
     else
         None
+
+let is_empty (s:string) = s = ""
+
+let to_base16 (bytes:byte[]) =
+    let sb = StringBuilder ()
+    let xx = "0123456789abcdef"
+    for b in bytes do 
+        let b = int b
+        let highorder = (b >>> 4) &&& 0x0f
+        let loworder  = b &&& 0x0f
+        xx.[highorder] |> sb.Append |> ignore
+        xx.[loworder]  |> sb.Append |> ignore
+    sb.ToString ()
+
+let sha1_str (s:string) : string =
+    let provider = new SHA1CryptoServiceProvider()
+    let bytes    = Encoding.UTF8.GetBytes s
+    let hash     = provider.ComputeHash bytes
+    to_base16 hash
+

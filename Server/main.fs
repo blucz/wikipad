@@ -18,6 +18,7 @@ let mutable port       = 8000           // port for http server
 let mutable root       = "/wiki"        // path of wiki relative to the domain
 let mutable domain     = "http://blucz.com"
 let mutable disqus     = None
+let mutable authfile   = None
 
 for arg in Environment.GetCommandLineArgs () do
     match arg with 
@@ -25,8 +26,10 @@ for arg in Environment.GetCommandLineArgs () do
         | StartsWith "-db="       rest      -> dbpath     <- rest
         | StartsWith "-port="     (Int num) -> port       <- num
         | StartsWith "-root="     rest      -> root       <- rest
-        | StartsWith "-disqus="   ""        -> ()               // support empty arg 
+        | "-disqus="                        -> ()               // support empty arg 
         | StartsWith "-disqus="   rest      -> disqus     <- Some rest
+        | "-auth="                          -> ()              
+        | StartsWith "-auth="     rest      -> authfile   <- Some rest
         | _                                 -> eprintfn "Unrecognized argument: %s" arg
 
 // environment
@@ -34,6 +37,22 @@ ignore (Directory.CreateDirectory dbpath)
 let server      = new HttpServer   (port = port)
 let meta_db     = new LevelDb.Database (mkpath dbpath "meta.db")
 let content_db  = new LevelDb.Database (mkpath dbpath "content.db")
+let session_db  = new LevelDb.Database (mkpath dbpath "session.db")
+let openauth    = authfile = None
+
+let auth (user:string) (password:string) : bool =
+    let hash  = sha1_str (user+":"+password)
+    match authfile with 
+        | None          -> true
+        | Some filename ->
+            let rec proclines lines =
+                match lines with
+                    | line::rest ->
+                        let splits      = wssplit line
+                        let luser,lhash = splits.[0],splits.[1]
+                        if luser = user && lhash = hash then true else proclines rest
+                    | []         -> false
+            File.ReadAllLines filename |> Seq.filter (is_empty >> not) |> Seq.toList |> proclines
 
 type Version = {
     mutable modtime : DateTime
@@ -90,11 +109,19 @@ let load_page (key:string) : Page option =
         | true,value -> Some (deserialize_page value)
         | _          -> None
 
+let normalize_encode (pagekey:string) =
+    pagekey |> normalize |> urlencode
+
 let static_url (file:string)    = sprintf "%s/static/%s" root file
-let page_url (pagekey:string)   = sprintf "%s/%s" root (normalize pagekey)
-let edit_url (pagekey:string)   = sprintf "%s/%s/edit" root (normalize pagekey)
-let save_url (pagekey:string)   = sprintf "%s/%s/save" root (normalize pagekey)
-let del_url (pagekey:string)    = sprintf "%s/%s/del" root (normalize pagekey)
+let page_url (pagekey:string)   = sprintf "%s/%s" root (normalize_encode pagekey)
+let edit_url (pagekey:string)   = sprintf "%s/%s/edit" root (normalize_encode pagekey)
+let save_url (pagekey:string)   = sprintf "%s/%s/save" root (normalize_encode pagekey)
+let del_url (pagekey:string)    = sprintf "%s/%s/del" root (normalize_encode pagekey)
+let cookieme_url                = sprintf "%s/cookieme" root
+let uncookieme_url              = sprintf "%s/uncookieme" root
+
+let ev_401 (tx:HttpTransaction) =
+    tx.Response.Respond HttpStatusCode.Unauthorized
 
 let ev_404 (tx:HttpTransaction) =
     tx.Response.Respond HttpStatusCode.NotFound
@@ -113,7 +140,10 @@ let render_left () : string =
         if key = "home" then "0000000000000" else key
     load_pages () |> Seq.sortBy sortkey |> Seq.map render_link |> String.concat "\n"
 
-let render_page title title_link body = 
+let render_page authenticated title title_link body = 
+    let auth = if openauth then "" 
+                           else if authenticated then sprintf @"<a class='uncookieme' href='%s'>&nbsp;</a>" uncookieme_url
+                                                 else sprintf @"<a class='cookieme'   href='%s'>&nbsp;</a>" cookieme_url
     sprintf @"<html>
         <head>
             <title>%s</title>
@@ -126,6 +156,7 @@ let render_page title title_link body =
                 <span class='title'>
                     <a href='%s'>%s</a>
                 </span>
+                %s
             </div>
             <div id='main'>
                 <div id='left'>
@@ -136,109 +167,91 @@ let render_page title title_link body =
                 </div>
             </div>
         </body>
-    </html>" title (static_url "style.css") (static_url "jquery-1.7.2.min.js") title_link title (render_left ()) body
+    </html>" title (static_url "style.css") (static_url "jquery-1.7.2.min.js") title_link title auth (render_left ()) body
 
-let ev_confirm_del (tx:HttpTransaction) (pagekey:string) =
-    let page = match load_page pagekey with
-                  | Some page -> page
-                  | None      -> (dummy_page pagekey)
-    let confirmer = sprintf @"<div class='confirm'>
-                               Are you sure you want to delete %s?
-                               <div class='confirmbuttons' align='right'>
-                                   <form action='%s' method='post' style='display:inline'>
-                                       <input type='hidden' name='noconfirm' value='true' />
-                                       <input type='submit' value='Cancel'></input>
-                                   </form>
-                                   <form action='%s' method='post' style='display:inline'>
-                                       <input type='hidden' name='confirm' value='true' />
-                                       <input type='submit' value='Delete'></input>
-                                   </form>
-                               <div>
-                           </div>" page.title (del_url pagekey) (del_url pagekey) 
-    let page = render_page page.title (page_url page.key) confirmer
-    tx.Response.Respond (HttpStatusCode.OK, page)
-
-let ev_del (tx:HttpTransaction) (pagekey:string) =
-    printfn "noconfirm '%s'" (tx.Request.PostData.GetString "noconfirm")
-    printfn "confirm '%s'" (tx.Request.PostData.GetString "confirm")
-    if (tx.Request.PostData.GetString "noconfirm") = "true" then
-        redirect tx (page_url pagekey)
-    else if (tx.Request.PostData.GetString "confirm") = "true" then
-        del_page pagekey
-        redirect tx (page_url "home")
+let ev_confirm_del (tx:HttpTransaction) (authenticated:bool) (pagekey:string) =
+    if authenticated then
+        let page = match load_page pagekey with
+                      | Some page -> page
+                      | None      -> (dummy_page pagekey)
+        let body = sprintf @"<div class='confirm'>
+                                 Are you sure you want to delete %s?
+                                 <div class='confirmbuttons' align='right'>
+                                     <form action='%s' method='post' style='display:inline'>
+                                         <input type='hidden' name='noconfirm' value='true' />
+                                         <input type='submit' value='Cancel'></input>
+                                     </form>
+                                     <form action='%s' method='post' style='display:inline'>
+                                         <input type='hidden' name='confirm' value='true' />
+                                         <input type='submit' value='Delete'></input>
+                                     </form>
+                                 <div>
+                             </div>" page.title (del_url pagekey) (del_url pagekey) 
+        let page = render_page authenticated page.title (page_url page.key) body
+        tx.Response.Respond (HttpStatusCode.OK, page)
     else
-        ev_confirm_del tx pagekey
+        ev_401 tx
 
-let ev_save (tx:HttpTransaction) (pagekey:string) =
-    let page,content = match load_page pagekey with
-                           | Some page -> page,(load_content page.content_id)
-                           | None      -> (dummy_page pagekey),""
+let ev_del (tx:HttpTransaction) (authenticated:bool) (pagekey:string) =
+    if authenticated then
+        if (tx.Request.PostData.GetString "noconfirm") = "true" then
+            redirect tx (page_url pagekey)
+        else if (tx.Request.PostData.GetString "confirm") = "true" then
+            del_page pagekey
+            redirect tx (page_url "home")
+        else
+            ev_confirm_del tx authenticated pagekey
+    else
+        ev_401 tx
 
-    let newcontent = (tx.Request.PostData.GetString "content").Trim()
-    let newtitle   = (tx.Request.PostData.GetString "title").Trim()
+let ev_save (tx:HttpTransaction) (authenticated:bool) (pagekey:string) =
+    if authenticated then
+        let page,content = match load_page pagekey with
+                               | Some page -> page,(load_content page.content_id)
+                               | None      -> (dummy_page pagekey),""
 
-    let newcontent = xml_decode newcontent
+        let newcontent = (tx.Request.PostData.GetString "content").Trim()
+        let newtitle   = (tx.Request.PostData.GetString "title").Trim()
 
-    if page.title <> newtitle || content <> newcontent then
-        let newmodtime  = DateTime.Now
-        let contentid   = Guid.NewGuid ()
-        let newversion  = { Version.modtime = newmodtime; id = contentid }
-        let newversions = newversion::(Array.toList page.versions) |> List.toArray
-        page.title    <- newtitle
-        page.modtime  <- newmodtime
-        page.versions <- newversions
-        save_content contentid newcontent
-        save_page page
-    redirect tx (page_url pagekey)
+        let newcontent = xml_decode newcontent
 
-let ev_edit (tx:HttpTransaction) (pagekey:string) =
-    let page,content = match load_page pagekey with
-                           | Some page -> page,(load_content page.content_id)
-                           | None      -> (dummy_page pagekey),""
-    let editor = sprintf @"<form action='%s' method='post'>
-                               <div class='editor'>
-                                   <div class='editorheading'>Title</div>
-                                   <input type='text' name='title' value='%s' class='editortitle' />
+        if page.title <> newtitle || content <> newcontent then
+            let newmodtime  = DateTime.Now
+            let contentid   = Guid.NewGuid ()
+            let newversion  = { Version.modtime = newmodtime; id = contentid }
+            let newversions = newversion::(Array.toList page.versions) |> List.toArray
+            page.title    <- newtitle
+            page.modtime  <- newmodtime
+            page.versions <- newversions
+            save_content contentid newcontent
+            save_page page
+        redirect tx (page_url pagekey)
+    else
+        ev_401 tx
 
-                                   <div class='editorheading'>Content</div>
-                                   <textarea name='content' class='editortext'>%s</textarea>
+let ev_edit (tx:HttpTransaction) (authenticated:bool) (pagekey:string) =
+    if authenticated then
+        let page,content = match load_page pagekey with
+                               | Some page -> page,(load_content page.content_id)
+                               | None      -> (dummy_page pagekey),""
+        let editor = sprintf @"<form action='%s' method='post'>
+                                   <div class='editor'>
+                                       <div class='editorheading'>Title</div>
+                                       <input type='text' name='title' value='%s' class='editortitle' />
 
-                                   <div class='submitcontainer'>
-                                       <input type='hidden' name='pagekey' value='%s'></input>
-                                       <input type='submit' value='Save'></input>
+                                       <div class='editorheading'>Content</div>
+                                       <textarea name='content' class='editortext'>%s</textarea>
+
+                                       <div class='submitcontainer'>
+                                           <input type='hidden' name='pagekey' value='%s'></input>
+                                           <input type='submit' value='Save'></input>
+                                       </div>
                                    </div>
-                               </div>
-                           </form>" (save_url pagekey) page.title (xml_escape content) pagekey
-    let page = render_page page.title (page_url page.key) editor
-    tx.Response.Respond (HttpStatusCode.OK, page)
-
-let render_content (pagekey:string) (content:string) =
-    let content  = wiki_creole content page_url id
-    let comments = match disqus with 
-                       | None        -> ""
-                       | Some disqus -> sprintf @"<div id='comments'>
-                                                  <div id='disqus_thread'></div>
-                                                  <script type='text/javascript'>
-                                                      var disqus_shortname  = '%s'; // required: replace example with your forum shortname
-                                                      (function() {
-                                                          var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
-                                                          dsq.src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
-                                                          (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
-                                                      })();
-                                                  </script>
-                                                  <noscript>Please enable JavaScript to view the <a href='http://disqus.com/?ref_noscript'>comments powered by Disqus.</a></noscript>
-                                                  <a href='http://disqus.com' class='dsq-brlink'>Comments powered by <span class='logo-disqus'>Disqus</span></a>
-                                                  </div>" disqus
-    sprintf @"<div class='content'>
-                  <div class='contentwrapper'>
-                      %s
-                  </div>
-                  <div class='editlinks' align='right'>
-                      <a href='%s'>Edit</a> | 
-                      <a href='%s'>Delete</a>
-                  </div> 
-                  %s
-              </div>" content (edit_url pagekey) (del_url pagekey) comments
+                               </form>" (save_url pagekey) page.title (xml_escape content) pagekey
+        let page = render_page authenticated page.title (page_url page.key) editor
+        tx.Response.Respond (HttpStatusCode.OK, page)
+    else
+        ev_401 tx
 
 let render_dummy_content (pagekey:string) =
     sprintf @"<div class='content'>
@@ -254,12 +267,78 @@ let render_dummy_content (pagekey:string) =
                   </div> 
               </div>" (edit_url pagekey)
 
-let ev_page (tx:HttpTransaction) (pagekey:string) =
+let ev_page (tx:HttpTransaction) (authenticated:bool) (pagekey:string) =
+    let render_content (pagekey:string) (content:string) =
+        let content  = wiki_creole content page_url id
+        let comments = match disqus with 
+                           | None        -> ""
+                           | Some disqus -> sprintf @"<div id='comments'>
+                                                      <div id='disqus_thread'></div>
+                                                      <script type='text/javascript'>
+                                                          var disqus_shortname  = '%s'; // required: replace example with your forum shortname
+                                                          (function() {
+                                                              var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+                                                              dsq.src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
+                                                              (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+                                                          })();
+                                                      </script>
+                                                      <noscript>Please enable JavaScript to view the <a href='http://disqus.com/?ref_noscript'>comments powered by Disqus.</a></noscript>
+                                                      <a href='http://disqus.com' class='dsq-brlink'>Comments powered by <span class='logo-disqus'>Disqus</span></a>
+                                                      </div>" disqus
+        let editlinks = if authenticated
+                            then sprintf @"<div class='editlinks' align='right'>
+                                               <a href='%s'>Edit</a> | 
+                                               <a href='%s'>Delete</a>
+                                           </div>" (edit_url pagekey) (del_url pagekey) 
+                            else ""
+        sprintf @"<div class='content'>
+                      <div class='contentwrapper'>
+                          %s
+                      </div>
+                      %s
+                      %s
+                  </div>" content editlinks comments
+
     let page,content = match load_page pagekey with
                            | Some page -> page,(load_content page.content_id |> render_content pagekey)
                            | None      -> (dummy_page pagekey),(render_dummy_content pagekey)
-    let rendered = render_page page.title (page_url page.key) content
+    let rendered = render_page authenticated page.title (page_url page.key) content
     tx.Response.Respond (HttpStatusCode.OK, rendered)
+
+let ev_uncookieme (tx:HttpTransaction) (authenticated:bool) =
+    if authenticated then
+        tx.Response.RemoveCookie "token"
+    match tx.Request.Headers.TryGetValue("Referer") with 
+        | false,_       -> redirect tx root
+        | true ,referer -> redirect tx referer
+
+let ev_cookieme (tx:HttpTransaction) (authenticated:bool) =
+    match tx.Request.PostData.["user"],tx.Request.PostData.["password"],tx.Request.PostData.["redirect_to"] with
+        | null,null,_    -> 
+            let referer = match tx.Request.Headers.TryGetValue("Referer") with 
+                              | false,_      -> ""
+                              | true,referer -> sprintf "<input type='hidden' name='redirect_to' value='%s'>" referer
+            let body = sprintf @"<div class='login'>
+                                       <form action='%s' method='post'>
+                                           <br />
+                                           <input type='text' name='user' autofocus='true' /><br />
+                                           <input type='password' name='password' /><br />
+                                           %s
+                                           <br />
+                                           <input type='submit' value ='Log in' />
+                                       </form>
+                                   </div>" cookieme_url referer
+            let page = render_page false "Log In" cookieme_url body
+            tx.Response.Respond (HttpStatusCode.OK, page)
+
+        | user,password,redirect_to ->
+            if auth user password then
+                let token = Guid.NewGuid().ToString("N")
+                session_db.Put (Encoding.UTF8.GetBytes token, Encoding.UTF8.GetBytes user)
+                tx.Response.SetCookie("token", token) |> ignore
+                redirect tx (if redirect_to = null then root else redirect_to)
+            else
+                redirect tx cookieme_url
 
 // toplevel request handler
 let ev_request (tx:HttpTransaction) =
@@ -270,21 +349,31 @@ let ev_request (tx:HttpTransaction) =
         let strip_suffix (p:string) (q:string) =
             p.Substring (0, p.Length - q.Length)
 
-        let handle_page_action (p:string) (cb:HttpTransaction -> string -> unit) =
-            let page = p.TrimStart [| '/' |]
-            let page = page.ToLowerInvariant ()
+        let authenticated = match tx.Request.Cookies.GetString "token" with
+                                | null  -> false || openauth
+                                | token -> match session_db.TryGetValue (Encoding.UTF8.GetBytes token) with
+                                               | true,_ -> true
+                                               | _      -> false || openauth
+
+        let handle_page_action (p:string) (cb:HttpTransaction -> bool -> string -> unit) =
+            let page = p.TrimStart [| '/' |] |> urldecode |> to_lower
             if page.Contains "/" then ev_404 tx
-                                 else cb tx (urldecode page)
+                                 else cb tx authenticated (urldecode page)
+
+        printfn "authenticated: %b" authenticated
+                            
         match path with
             | ""                                   -> page_url "home" |> redirect tx 
             | "/favicon.ico"                       -> mkpath staticpath "favicon.ico" |> sendfile tx
+            | "/uncookieme"                        -> ev_uncookieme tx authenticated
+            | "/cookieme"                          -> ev_cookieme   tx authenticated
             | p when p.StartsWith "/static/"       -> 
                 let filename = p.Substring "/static/".Length
                 if filename.Contains ".." then ev_404 tx
                 else mkpath staticpath filename |> sendfile tx
             | p when p.EndsWith "/save"            -> handle_page_action (strip_suffix p "/save") ev_save
-            | p when p.EndsWith "/edit"            -> handle_page_action (strip_suffix p "/edit") ev_edit
             | p when p.EndsWith "/del"             -> handle_page_action (strip_suffix p "/del")  ev_del 
+            | p when p.EndsWith "/edit"            -> handle_page_action (strip_suffix p "/edit") ev_edit
             | p                                    -> handle_page_action p ev_page
     with e ->
         printfn "Error processing request: %s" (e.ToString ())

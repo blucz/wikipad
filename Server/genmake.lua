@@ -21,3 +21,26 @@ project "Server"
     }
 
 done "Server"
+
+project "authtool"
+    category "Test"
+    kind     "ConsoleApp"
+    language "F#"
+
+    linksystemlibs {
+        "System",
+        "System.Core",
+        "System.Runtime.Serialization",
+    }
+
+    linkprojects {
+        "Http",
+        "LevelDb",
+    }
+
+    compilefiles {
+        "utils.fs",
+        "authtool.fs",
+    }
+
+done "authtool"
