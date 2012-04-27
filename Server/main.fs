@@ -149,6 +149,7 @@ let render_page authenticated title title_link body =
             <title>%s</title>
             <link rel='stylesheet' href='%s' />
             <script src='%s'></script>
+            <script src='%s'></script>
         </head>
         <body>
             <div id='container'>
@@ -167,7 +168,10 @@ let render_page authenticated title title_link body =
                 </div>
             </div>
         </body>
-    </html>" title (static_url "style.css") (static_url "jquery-1.7.2.min.js") title_link title auth (render_left ()) body
+    </html>" title (static_url "style.css") 
+                   (static_url "jquery-1.7.2.min.js") 
+                   (static_url "jquery.textarea.js")
+                   title_link title auth (render_left ()) body
 
 let ev_confirm_del (tx:HttpTransaction) (authenticated:bool) (pagekey:string) =
     if authenticated then
@@ -241,6 +245,16 @@ let ev_edit (tx:HttpTransaction) (authenticated:bool) (pagekey:string) =
 
                                        <div class='editorheading'>Content</div>
                                        <textarea name='content' class='editortext'>%s</textarea>
+                                       <script>
+                                           $(function(){
+                                               function onsize() {
+                                                   $('.editortext').css('height', $(window).height() - 240); 
+                                               }
+                                               $(window).resize(onsize)
+                                               onsize()
+                                               $('.editortext').tabby()
+                                           })
+                                       </script>
 
                                        <div class='submitcontainer'>
                                            <input type='hidden' name='pagekey' value='%s'></input>
