@@ -267,37 +267,74 @@ let render_dummy_content (pagekey:string) =
                   </div> 
               </div>" (edit_url pagekey)
 
+let render_comments_switch (pagekey:string) =
+    match disqus with 
+        | None        -> ""
+        | Some disqus -> sprintf @"<div id='comments_switch'>
+                                       <a href='#disqus_thread' class='on' data-disqus-identifier='%s'>&nbsp;</a>
+                                       <a href='#' class='off' style='display:none'>Hide Discussion</a>
+                                   </div>" pagekey
+
+let render_comments (pagekey:string) =
+    match disqus with 
+        | None        -> ""
+        | Some disqus -> sprintf @"<div id='comments'>
+                                       <div id='disqus_thread'></div>
+                                       <script type='text/javascript'>
+                                           $(function() {
+                                               $('#comments_switch .on').click(function(e) {
+                                                   $('#comments_switch .on').hide()
+                                                   $('#comments_switch .off').show()
+                                                   $('#comments').show()
+                                                   e.preventDefault()
+                                               });
+                                               $('#comments_switch .off').click(function(e) {
+                                                   $('#comments_switch .off').hide()
+                                                   $('#comments_switch .on').show()
+                                                   $('#comments').hide()
+                                                   e.preventDefault()
+                                               });
+                                           });
+ 
+                                           var disqus_shortname  = '%s';
+                                           var disqus_identifier = '%s';
+ 
+                                           (function() {
+                                               var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+                                               dsq.src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
+                                               (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+                                           })();
+ 
+                                           (function() {
+                                               var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+                                               dsq.src = 'http://' + disqus_shortname + '.disqus.com/count.js';
+                                               (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+                                           })();
+                                       </script>
+                                       <noscript>Please enable JavaScript to view the <a href='http://disqus.com/?ref_noscript'>comments powered by Disqus.</a></noscript>
+                                       <a href='http://disqus.com' class='dsq-brlink'>Comments powered by <span class='logo-disqus'>Disqus</span></a>
+                                   </div>" disqus pagekey
+
 let ev_page (tx:HttpTransaction) (authenticated:bool) (pagekey:string) =
     let render_content (pagekey:string) (content:string) =
-        let content  = wiki_creole content page_url id
-        let comments = match disqus with 
-                           | None        -> ""
-                           | Some disqus -> sprintf @"<div id='comments'>
-                                                      <div id='disqus_thread'></div>
-                                                      <script type='text/javascript'>
-                                                          var disqus_shortname  = '%s'; // required: replace example with your forum shortname
-                                                          (function() {
-                                                              var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
-                                                              dsq.src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
-                                                              (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
-                                                          })();
-                                                      </script>
-                                                      <noscript>Please enable JavaScript to view the <a href='http://disqus.com/?ref_noscript'>comments powered by Disqus.</a></noscript>
-                                                      <a href='http://disqus.com' class='dsq-brlink'>Comments powered by <span class='logo-disqus'>Disqus</span></a>
-                                                      </div>" disqus
-        let editlinks = if authenticated
-                            then sprintf @"<div class='editlinks' align='right'>
-                                               <a href='%s'>Edit</a> | 
-                                               <a href='%s'>Delete</a>
-                                           </div>" (edit_url pagekey) (del_url pagekey) 
-                            else ""
+        let content         = wiki_creole content page_url id
+        let comments        = render_comments        pagekey
+        let comments_switch = render_comments_switch pagekey
+        let editlinks       = if authenticated then sprintf @"<div class='editlinks' align='right'>
+                                                                  <a href='%s'>Edit</a> | <a href='%s'>Delete</a>
+                                                              </div>" (edit_url pagekey) (del_url pagekey) 
+                                               else ""
         sprintf @"<div class='content'>
                       <div class='contentwrapper'>
                           %s
                       </div>
+                      <div class='belowcontent'>
+                          %s
+                          %s
+                          &nbsp;
+                      </div>
                       %s
-                      %s
-                  </div>" content editlinks comments
+                  </div>" content editlinks comments_switch comments
 
     let page,content = match load_page pagekey with
                            | Some page -> page,(load_content page.content_id |> render_content pagekey)
@@ -360,8 +397,6 @@ let ev_request (tx:HttpTransaction) =
             if page.Contains "/" then ev_404 tx
                                  else cb tx authenticated (urldecode page)
 
-        printfn "authenticated: %b" authenticated
-                            
         match path with
             | ""                                   -> page_url "home" |> redirect tx 
             | "/favicon.ico"                       -> mkpath staticpath "favicon.ico" |> sendfile tx

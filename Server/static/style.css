@@ -125,14 +125,15 @@ code {
     padding-bottom: 8px;
     min-height: 240px;
 }
-.editlinks {
+.belowcontent {
     margin-top: 8px;
     width: 640px;
 }
-.contentwrapper h1 { margin: 0; padding: 0; }
-.contentwrapper h2 { margin: 0; padding: 0; }
-.contentwrapper h3 { margin: 0; padding: 0; }
-.contentwrapper h4 { margin: 0; padding: 0; }
+
+.contentwrapper h1 { margin: 0; padding: 0; font-size: 16pt; font-weight: bold; margin-bottom:4px; color: #000; }
+.contentwrapper h2 { margin: 0; padding: 0; font-size: 14pt; font-weight: bold; margin-bottom:4px; color: #000; }
+.contentwrapper h3 { margin: 0; padding: 0; font-size: 12pt; font-weight: bold; margin-bottom:4px; color: #000; }
+.contentwrapper h4 { margin: 0; padding: 0; font-size: 10pt; font-weight: bold; margin-bottom:4px; color: #000; }
 
 .contentwrapper table * tr th { 
     padding: 6px 12px 6px 12px;
@@ -200,5 +201,18 @@ code {
 .uncookieme:hover {
     background-color: #f00;
     color: #f00;
+}
+
+#comments {
+    display: none;
+    margin-top: 20px;
+}
+
+.editlinks {
+    float: right;
+}
+
+#comments_switch {
+    float: left;
 }
 
