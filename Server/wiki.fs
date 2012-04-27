@@ -8,7 +8,7 @@ type private InlineFormat = Strong | Em
 
 (* transforms wikicreole 1.0 into html *)
 let wiki_creole (input:string) (getlink : string -> string) (getimage : string -> string) : string =
-    let lines     = split "\n" input |> List.map trim
+    let lines     = split "\n" input
     let sb        = StringBuilder ()
 
     (* active patterns to help with char-level parsing *)
@@ -80,7 +80,15 @@ let wiki_creole (input:string) (getlink : string -> string) (getimage : string -
         content      |> append_content
         closetag tag |> append
 
-    let is_list_start (listchar:char) (line:string) = line.Length >= 2 && line.[0] = listchar && line.[1] <> listchar
+    (* perf: remove intermediate string copies for trim *)
+    let is_list_start    (listchar:char) (line:string) = let line = trim line in line.Length >= 2 && line.[0] = listchar && line.[1] <> listchar
+    let is_nowiki_start  (line:string)                 = let line = trim line in line = "{{{"
+    let is_nowiki_end    (line:string)                 = let line = trim line in line = "}}}"
+    let is_hr_start      (line:string)                 = let line = trim line in line = "----"
+    let is_empty         (line:string)                 = let line = trim line in line = ""
+    let is_header_start  (line:string)                 = let line = trim line in line.Length > 0 && line.[0] = '='
+    let is_table_start   (line:String)                 = let line = trim line in line.Length > 0 && line.[0] = '|'
+    let is_theader_start (line:String)                 = let line = trim line in line.Length > 1 && line.[0] = '|' && line.[1] = '='
 
     let opentag  (s:string) = sprintf "<%s>"  s
     let closetag (s:string) = sprintf "</%s>" s
@@ -89,8 +97,8 @@ let wiki_creole (input:string) (getlink : string -> string) (getimage : string -
     let proc_table lines = 
         let rec proc_headers lines = 
             match lines with 
-                | line::rest when startswith "|=" line -> 
-                    let line   = line |> trimend '|' |> skipchars 2 
+                | line::rest when is_theader_start line -> 
+                    let line   = line |> trim |> trimend '|' |> skipchars 2 
                     let splits = split "|=" line |> List.map trim
                     splits |> Seq.iter (append_tag "th")
                     proc_headers rest
@@ -98,8 +106,8 @@ let wiki_creole (input:string) (getlink : string -> string) (getimage : string -
 
         let rec proc_data lines =
             match lines with
-                | line::rest when startswith "|" line ->
-                    let line   = line |> trimend '|' |> skipchars 1
+                | line::rest when is_table_start line ->
+                    let line   = line |> trim |> trimend '|' |> skipchars 1
                     let splits = split "|" line |> List.map trim
                     append "<tr>"
                     splits |> Seq.iter (append_tag "td")
@@ -109,7 +117,7 @@ let wiki_creole (input:string) (getlink : string -> string) (getimage : string -
 
         append_line "<table>"
         let firstline = List.head lines
-        let rest = if startswith "|=" firstline then
+        let rest = if is_theader_start firstline then
                        append "<tr>"
                        let rest = proc_headers lines
                        append_line "</tr>"
@@ -121,7 +129,7 @@ let wiki_creole (input:string) (getlink : string -> string) (getimage : string -
         rest
 
     let proc_header lines =
-        let hline         = List.head lines |> trimend '='
+        let hline         = List.head lines |> trim |> trimend '='
         let content       = hline |> trimstart '='
         let hlevel        = clamp 1 (hline.Length - content.Length) 6
         let tag = sprintf "h%d" hlevel
@@ -133,14 +141,19 @@ let wiki_creole (input:string) (getlink : string -> string) (getimage : string -
         append_line (opentag tag)
         let is_list_end (line:string) = 
             match line with
-                | ""      -> true | "{{{"   -> true | "----"  -> true
-                | line when startswith "=" line -> true | line when startswith "|" line -> true
-                | _  -> false
+                | line when is_empty          line -> true
+                | line when is_nowiki_start   line -> true
+                | line when is_hr_start       line -> true
+                | line when is_header_start   line -> true
+                | line when is_table_start    line -> true
+                | _                                -> false
+
         let rec proc_list_line isopen lines =
             match lines with 
                 | line::rest when is_list_end line -> if isopen then append_line "</li>"
                                                       lines                                              // end of list
                 | line::rest ->
+                    let line = trim line
                     let content  = line |> trimstart listchar 
                     let newdepth = line.Length - content.Length
                     match newdepth with
@@ -163,17 +176,17 @@ let wiki_creole (input:string) (getlink : string -> string) (getimage : string -
     let proc_para lines =
         append_line "<p>"
         let parsb = StringBuilder ()
-        let is_paragraph_end (line:string) = 
-            match line with
-                | ""      -> true | "{{{"   -> true | "----"  -> true
-                | line when is_list_start '#' line  -> true | line when is_list_start '*' line  -> true
-                | line when startswith "=" line     -> true | line when startswith "|" line     -> true
-                | _                              -> false
         let rec proc_parlines lines =
             match lines with 
-                | line::rest when is_paragraph_end line -> lines
-                | line::rest                            -> parsb.AppendLine line |> ignore; proc_parlines rest
-                | []                                    -> []
+                | line::rest when is_empty          line -> lines
+                | line::rest when is_nowiki_start   line -> lines
+                | line::rest when is_hr_start       line -> lines
+                | line::rest when is_list_start '#' line -> lines
+                | line::rest when is_list_start '*' line -> lines
+                | line::rest when is_header_start   line -> lines
+                | line::rest when is_table_start    line -> lines
+                | line::rest                             -> parsb.AppendLine (trim line) |> ignore; proc_parlines rest
+                | []                                     -> []
         let rest = proc_parlines lines
         parsb.ToString () |> append_content 
         append_line "\n</p>"
@@ -181,20 +194,20 @@ let wiki_creole (input:string) (getlink : string -> string) (getimage : string -
 
     let rec proc_nowiki lines =
         match lines with
-            | "{{{"::rest    -> append_line "<pre><code>"   ; proc_nowiki rest
-            | "}}}"::rest    -> append_line "\n</code></pre>" ; rest
-            | line::rest     -> append_escaped_line line      ; proc_nowiki rest 
-            | []             -> append_line "\n</code></pre>" ; []
+            | line::rest when is_nowiki_start line -> append"<pre><code>"   ; proc_nowiki rest
+            | line::rest when is_nowiki_end line   -> append_line "</code></pre>" ; rest
+            | line::rest                           -> append_escaped_line line      ; proc_nowiki rest 
+            | []                                   -> append_line "</code></pre>" ; []
 
     let rec proc_lines (lines : string list) : unit =
         let rest = match lines with
-                       | ""::rest                               -> rest                      
-                       | "{{{"::rest                            -> proc_nowiki lines   
-                       | "----"::rest                           -> append_line "<hr />"; List.tail lines
+                       | line::rest when is_empty          line -> rest                      
+                       | line::rest when is_nowiki_start   line -> proc_nowiki lines   
+                       | line::rest when is_hr_start       line -> append_line "<hr />"; List.tail lines
                        | line::rest when is_list_start '*' line -> proc_list   lines 1 '*' "ul"
                        | line::rest when is_list_start '#' line -> proc_list   lines 1 '#' "ol"
-                       | line::rest when startswith "=" line    -> proc_header lines   
-                       | line::rest when startswith "|"  line   -> proc_table  lines   
+                       | line::rest when is_header_start   line -> proc_header lines   
+                       | line::rest when is_table_start    line -> proc_table  lines   
                        | line::rest                             -> proc_para   lines
                        | []                                     -> []
         if rest <> [] then proc_lines rest
