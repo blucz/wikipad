@@ -59,7 +59,6 @@ let urlencode (s:string) =
     sb.ToString ()
 
 let urldecode (s:string) =
-    let idx = ref 0
     let bs : byte array = Array.zeroCreate s.Length
     let parse_hex (c:char) : int =
         match Char.ToLowerInvariant c with
@@ -68,21 +67,23 @@ let urldecode (s:string) =
             | '8' -> 0x8 | '9' -> 0x9 | 'a' -> 0xa | 'b' -> 0xb
             | 'c' -> 0xc | 'd' -> 0xd | 'e' -> 0xe | 'f' -> 0xf
             | _ -> failwith "invalid hex char"
-    let rec proc (s:string) (n:int) =
+    let rec proc (s:string) (n:int) (idx:int) =
         if n = s.Length then 
-            ()
+            idx
         else 
             match s.[n] with
-                | '+'       -> bs.[!idx] <- byte ' '; idx := !idx + 1
-                | '%'       -> 
-                    let hi = int s.[!idx + 1]
-                    let lo = int s.[!idx + 2]
-                    bs.[!idx] <- byte ((hi <<< 4) ||| lo)
-                    idx := !idx + 3
-                | c         -> bs.[!idx] <- byte  c ; idx := !idx + 1
-            proc s (n + 1)
-    proc s 0
-    Encoding.UTF8.GetString(bs, 0, !idx)
+                | '+'                       -> 
+                    bs.[idx] <- byte ' '; 
+                    proc s (n+1) (idx+1)
+                | '%' when n + 2 < s.Length ->
+                    let hi = parse_hex s.[n + 1]
+                    let lo = parse_hex s.[n + 2]
+                    bs.[idx] <- byte ((hi <<< 4) ||| lo)
+                    proc s (n+3) (idx+1)
+                | c         -> 
+                    bs.[idx] <- byte  c
+                    proc s (n+1) (idx+1)
+    Encoding.UTF8.GetString(bs, 0, proc s 0 0)
 
 let redirect (tx:HttpTransaction) (path:string) =
     tx.Response.Headers.SetHeader ("Location", path)
